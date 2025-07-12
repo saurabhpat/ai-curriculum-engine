@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Curriculum Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .spinner, .modal-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-left-color: #4f46e5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+        }
+        .modal-spinner {
+            width: 30px;
+            height: 30px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        html {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        html::-webkit-scrollbar {
+            display: none;
+        }
+        .modal-overlay {
+            transition: opacity 0.3s ease;
+        }
+        .modal-content {
+            transition: transform 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 flex items-center justify-center min-h-screen p-4">
+
+
+    <div class="w-full max-w-2xl mx-auto">
+       
+        <!-- View 1: Home Screen -->
+        <div id="home-view">
+            <header class="text-center mb-8">
+                <h1 class="text-4xl md:text-5xl font-bold text-white mb-2">AI Curriculum Engine</h1>
+                <p class="text-lg text-gray-400">Master any subject, one book at a time.</p>
+            </header>
+            <main>
+                <form id="topic-form" class="flex flex-col sm:flex-row gap-3">
+                    <input type="text" id="topic-input" placeholder="Enter a topic, e.g., 'Stoicism' or 'Learn Marketing'" class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white placeholder-gray-500 transition duration-200">
+                    <button type="submit" id="submit-button" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-3 rounded-lg transition duration-200 flex items-center justify-center">
+                        Create Roadmap
+                    </button>
+                </form>
+                 <p id="error-message" class="text-red-400 text-center mt-4 hidden"></p>
+            </main>
+        </div>
+
+
+        <!-- View 2: Loading Screen -->
+        <div id="loading-view" class="hidden text-center">
+            <div class="spinner mx-auto mb-4"></div>
+            <p class="text-xl font-medium text-gray-300">Building your curriculum...</p>
+            <p class="text-gray-400">The AI is analyzing sources and sequencing your path.</p>
+        </div>
+
+
+        <!-- View 3: Results Screen -->
+        <div id="results-view" class="hidden">
+            <header class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <button id="back-button" class="text-indigo-400 hover:text-indigo-300 mb-2">&larr; Start Over</button>
+                    <h2 class="text-2xl md:text-3xl font-bold text-white">Your Roadmap for: <span id="roadmap-topic" class="text-indigo-400"></span></h2>
+                </div>
+                <div class="flex gap-2 w-full sm:w-auto">
+                    <button id="study-plan-button" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2 rounded-lg transition duration-200 w-full sm:w-auto">✨ Create Study Plan</button>
+                    <button id="copy-link-button" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold px-4 py-2 rounded-lg transition duration-200 w-full sm:w-auto">Copy Link</button>
+                </div>
+            </header>
+            <div id="roadmap-container" class="space-y-6">
+                <!-- Roadmap items will be injected here -->
+            </div>
+            <footer class="mt-10 text-center p-6 bg-gray-800 rounded-lg">
+                <p class="font-semibold text-lg mb-3">Was this roadmap helpful?</p>
+                <div class="flex justify-center gap-4">
+                    <button class="feedback-button bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-5 rounded-lg transition duration-200">👍 Yes</button>
+                    <button class="feedback-button bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-5 rounded-lg transition duration-200">👎 No</button>
+                </div>
+                <p id="feedback-thanks" class="text-gray-400 mt-4 hidden">Thank you for your feedback!</p>
+            </footer>
+        </div>
+
+
+        <!-- Modal for 'Link Copied' confirmation -->
+        <div id="copied-modal" class="fixed top-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg transform translate-x-full transition-transform duration-300">
+            Link copied to clipboard!
+        </div>
+
+
+        <!-- Generic Modal for AI-generated content -->
+        <div id="ai-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 hidden modal-overlay">
+            <div class="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 relative modal-content transform scale-95">
+                <button id="close-modal-button" class="absolute top-4 right-4 text-gray-400 hover:text-white">&times;</button>
+                <div id="modal-content-area">
+                    <!-- Spinner and content will be injected here -->
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+
+
+    <script>
+        // --- Global State ---
+        let currentRoadmap = null;
+
+
+        // --- DOM Element Selection ---
+        const homeView = document.getElementById('home-view');
+        const loadingView = document.getElementById('loading-view');
+        const resultsView = document.getElementById('results-view');
+        const views = [homeView, loadingView, resultsView];
+
+
+        const topicForm = document.getElementById('topic-form');
+        const topicInput = document.getElementById('topic-input');
+        const errorMessage = document.getElementById('error-message');
+        const submitButton = document.getElementById('submit-button');
+       
+        const roadmapTopic = document.getElementById('roadmap-topic');
+        const roadmapContainer = document.getElementById('roadmap-container');
+       
+        const backButton = document.getElementById('back-button');
+        const copyLinkButton = document.getElementById('copy-link-button');
+        const copiedModal = document.getElementById('copied-modal');
+
+
+        const feedbackButtons = document.querySelectorAll('.feedback-button');
+        const feedbackThanks = document.getElementById('feedback-thanks');
+
+
+        const studyPlanButton = document.getElementById('study-plan-button');
+        const aiModal = document.getElementById('ai-modal');
+        const closeModalButton = document.getElementById('close-modal-button');
+        const modalContentArea = document.getElementById('modal-content-area');
+
+
+
+
+        // --- State Management ---
+        function showView(viewId) {
+            views.forEach(view => {
+                if (view.id === viewId) {
+                    view.classList.remove('hidden');
+                } else {
+                    view.classList.add('hidden');
+                }
+            });
+        }
+
+
+        function showModal() {
+            aiModal.classList.remove('hidden');
+            setTimeout(() => {
+                aiModal.classList.remove('opacity-0');
+                aiModal.querySelector('.modal-content').classList.remove('scale-95');
+            }, 10);
+        }
+
+
+        function hideModal() {
+            aiModal.classList.add('opacity-0');
+            aiModal.querySelector('.modal-content').classList.add('scale-95');
+            setTimeout(() => {
+                aiModal.classList.add('hidden');
+            }, 300);
+        }
+
+
+        function setModalLoading(title) {
+            modalContentArea.innerHTML = `
+                <h2 class="text-2xl font-bold text-white mb-4">${title}</h2>
+                <div class="flex items-center justify-center py-8">
+                    <div class="modal-spinner"></div>
+                </div>
+                <p class="text-center text-gray-400">✨ Gemini is working...</p>
+            `;
+        }
+
+
+        // --- Live AI/Backend ---
+        async function callGeminiAPI(prompt, schema) {
+            const apiKey = ""; // API key is handled by the environment
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+
+            const payload = {
+                contents: [{ role: "user", parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: schema
+                }
+            };
+
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.statusText}`);
+                }
+
+
+                const result = await response.json();
+               
+                if (result.candidates && result.candidates.length > 0) {
+                    const jsonText = result.candidates[0].content.parts[0].text;
+                    return JSON.parse(jsonText);
+                } else {
+                    throw new Error("No content received from AI.");
+                }
+
+
+            } catch (error) {
+                console.error("Error calling Gemini API:", error);
+                return null; // Return null to indicate failure
+            }
+        }
+
+
+        async function generateRoadmapWithAI(topic) {
+            const prompt = `You are an expert curriculum designer. A user wants a foundational book-based learning roadmap for "${topic}". Generate a structured learning path of exactly 5 books, sequenced logically for a beginner. For each book, provide the title, author, and a concise note (1-2 sentences) explaining its place in the sequence. Return a single, minified JSON object matching the schema.`;
+            const schema = {
+                type: "OBJECT", properties: { "topic": { "type": "STRING" }, "books": { "type": "ARRAY", "items": { "type": "OBJECT", "properties": { "title": { "type": "STRING" }, "author": { "type": "STRING" }, "note": { "type": "STRING" }}, required: ["title", "author", "note"] }}}, required: ["topic", "books"]
+            };
+            return callGeminiAPI(prompt, schema);
+        }
+
+
+        async function generateDeeperDive(bookTitle, author) {
+            const prompt = `You are a literary analyst. Provide a "Deeper Dive" for the book "${bookTitle}" by ${author}. Include a brief summary, 3-4 key takeaways as a bulleted list, and a description of the "Ideal Reader For This Book". Return a single, minified JSON object matching the schema.`;
+            const schema = {
+                type: "OBJECT", properties: { "summary": { "type": "STRING" }, "takeaways": { "type": "ARRAY", items: { "type": "STRING" } }, "ideal_reader": { "type": "STRING" }}, required: ["summary", "takeaways", "ideal_reader"]
+            };
+            return callGeminiAPI(prompt, schema);
+        }
+
+
+        async function generateStudyPlan(books) {
+            const bookList = books.map(b => `"${b.title}" by ${b.author}`).join(', ');
+            const prompt = `You are an academic advisor. Create a simple 5-week study plan for the following books: ${bookList}. The plan should assign one book per week. For each week, provide a concise "study_goal" (1-2 sentences) that helps the user focus. Return a single, minified JSON object matching the schema.`;
+            const schema = {
+                type: "OBJECT", properties: { "plan": { "type": "ARRAY", "items": { "type": "OBJECT", "properties": { "week": { "type": "NUMBER" }, "book_title": { "type": "STRING" }, "study_goal": { "type": "STRING" }}, required: ["week", "book_title", "study_goal"] }}}, required: ["plan"]
+            };
+            return callGeminiAPI(prompt, schema);
+        }
+
+
+
+
+        // --- Rendering Logic ---
+        function renderRoadmap(roadmapData) {
+            currentRoadmap = roadmapData;
+            roadmapTopic.textContent = roadmapData.topic;
+            roadmapContainer.innerHTML = '';
+           
+            roadmapData.books.forEach((book, index) => {
+                const bookElement = document.createElement('div');
+                bookElement.className = 'flex flex-col sm:flex-row items-start gap-5 p-5 bg-gray-800 rounded-lg shadow-md';
+                const coverUrl = `https://placehold.co/150x220/1a202c/ffffff?text=${encodeURIComponent('Book ' + (index + 1))}`;
+                bookElement.innerHTML = `
+                    <div class="flex-shrink-0 w-full sm:w-auto text-center">
+                        <img src="${coverUrl}" alt="Cover of ${book.title}" class="w-32 h-auto mx-auto rounded-md shadow-lg" onerror="this.onerror=null;this.src='https://placehold.co/150x220/1a202c/ffffff?text=Image+Error';">
+                        <p class="mt-3 text-2xl font-bold text-gray-400">${index + 1}</p>
+                    </div>
+                    <div class="flex-grow">
+                        <h3 class="text-xl font-bold text-white">${book.title}</h3>
+                        <p class="text-md text-gray-400 mb-3">by ${book.author}</p>
+                        <p class="text-gray-300 leading-relaxed mb-4">${book.note}</p>
+                        <button class="deeper-dive-button bg-indigo-800 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg transition duration-200 text-sm" data-title="${book.title}" data-author="${book.author}">✨ Deeper Dive</button>
+                    </div>
+                `;
+                roadmapContainer.appendChild(bookElement);
+            });
+        }
+
+
+        function renderDeeperDive(data, title) {
+            let takeawaysHtml = data.takeaways.map(item => `<li class="mb-2">${item}</li>`).join('');
+            modalContentArea.innerHTML = `
+                <h2 class="text-2xl font-bold text-white mb-4">Deeper Dive: ${title}</h2>
+                <div class="space-y-4 text-gray-300">
+                    <div>
+                        <h3 class="font-semibold text-lg text-indigo-400 mb-2">Summary</h3>
+                        <p>${data.summary}</p>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-lg text-indigo-400 mb-2">Key Takeaways</h3>
+                        <ul class="list-disc list-inside">${takeawaysHtml}</ul>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-lg text-indigo-400 mb-2">Ideal Reader For This Book</h3>
+                        <p>${data.ideal_reader}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+
+        function renderStudyPlan(data) {
+             let planHtml = data.plan.map(item => `
+                <div class="p-4 bg-gray-700 rounded-lg">
+                    <h4 class="font-bold text-white">Week ${item.week}: ${item.book_title}</h4>
+                    <p class="text-gray-300 mt-1">${item.study_goal}</p>
+                </div>
+            `).join('');
+            modalContentArea.innerHTML = `
+                <h2 class="text-2xl font-bold text-white mb-4">Your 5-Week Study Plan</h2>
+                <div class="space-y-3">${planHtml}</div>
+            `;
+        }
+
+
+        // --- Event Handlers ---
+        topicForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const topic = topicInput.value.trim();
+            if (topic === '') {
+                errorMessage.textContent = 'Please enter a topic to continue.';
+                errorMessage.classList.remove('hidden');
+                return;
+            }
+            errorMessage.classList.add('hidden');
+            submitButton.disabled = true;
+            submitButton.textContent = 'Generating...';
+           
+            showView('loading-view');
+           
+            const roadmapData = await generateRoadmapWithAI(topic);
+
+
+            if (roadmapData) {
+                renderRoadmap(roadmapData);
+                showView('results-view');
+            } else {
+                errorMessage.textContent = 'Sorry, we couldn\'t generate a roadmap. Please try again.';
+                errorMessage.classList.remove('hidden');
+                showView('home-view');
+            }
+           
+            submitButton.disabled = false;
+            submitButton.textContent = 'Create Roadmap';
+        });
+
+
+        roadmapContainer.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('deeper-dive-button')) {
+                const button = e.target;
+                const title = button.dataset.title;
+                const author = button.dataset.author;
+               
+                showModal();
+                setModalLoading(`Deeper Dive: ${title}`);
+
+
+                const deeperDiveData = await generateDeeperDive(title, author);
+                if (deeperDiveData) {
+                    renderDeeperDive(deeperDiveData, title);
+                } else {
+                    modalContentArea.innerHTML = `<p class="text-red-400">Could not generate deeper dive. Please try again.</p>`;
+                }
+            }
+        });
+
+
+        studyPlanButton.addEventListener('click', async () => {
+            if (!currentRoadmap) return;
+           
+            showModal();
+            setModalLoading('Creating Your Study Plan');
+
+
+            const studyPlanData = await generateStudyPlan(currentRoadmap.books);
+            if (studyPlanData) {
+                renderStudyPlan(studyPlanData);
+            } else {
+                modalContentArea.innerHTML = `<p class="text-red-400">Could not generate study plan. Please try again.</p>`;
+            }
+        });
+
+
+        backButton.addEventListener('click', () => {
+            topicInput.value = '';
+            errorMessage.classList.add('hidden');
+            feedbackThanks.classList.add('hidden');
+            feedbackButtons.forEach(b => b.disabled = false);
+            currentRoadmap = null;
+            showView('home-view');
+        });
+
+
+        copyLinkButton.addEventListener('click', () => {
+            const url = window.location.href;
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = url;
+            document.body.appendChild(tempTextArea);
+            tempTextArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempTextArea);
+
+
+            copiedModal.classList.remove('translate-x-full');
+            setTimeout(() => {
+                copiedModal.classList.add('translate-x-full');
+            }, 2000);
+        });
+
+
+        feedbackButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                feedbackThanks.classList.remove('hidden');
+                feedbackButtons.forEach(b => b.disabled = true);
+            });
+        });
+
+
+        closeModalButton.addEventListener('click', hideModal);
+        aiModal.addEventListener('click', (e) => {
+            if (e.target === aiModal) {
+                hideModal();
+            }
+        });
+
+
+        // --- Initial State ---
+        showView('home-view');
+
+
+    </script>
+</body>
+</html>
